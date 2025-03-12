@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>공유 가능 달력</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        .calendar { width: 350px; margin: 20px auto; border-collapse: collapse; table-layout: fixed; }
+        .calendar th, .calendar td { 
+            border: 1px solid #ddd; padding: 10px; text-align: center; cursor: pointer;
+            width: 50px; height: 50px; position: relative;
+        }
+        .calendar th { background: #f4f4f4; }
+        .available { background: #c8f7c5; }  /* 가능: 초록색 */
+        .unavailable { background: #f7c5c5; }  /* 불가능: 빨간색 */
+        .header { display: flex; justify-content: space-between; align-items: center; width: 350px; margin: 20px auto; }
+        .header button { padding: 5px 10px; cursor: pointer; }
+        .code-section { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div style="display: flex;">
+        <!-- Sidebar for instructions -->
+        <div style="width: 200px; padding: 10px; border-right: 1px solid #ccc;">
+            <p>1. 코드생성</p>
+            <p>2. 이름입력</p>
+            <p>3. 달력에서 날짜 선택 <br>(1번 클릭: 가능, 2번 클릭: 불가능)</p>
+            <p>4. 선택한 날짜 서버로 전송</p>
+            <p>5. 공유 코드 친구들한테 공유</p>
+            <p>6. 이후에 입력하는 친구들은 전달받은 코드 복붙하고 "코드입력" 클릭하고 이후에는 동일하게</p>
+        </div>
+
+        <!-- Main content -->
+        <div style="flex-grow: 1; padding: 20px;">
+            <div class="code-section">
+                <input type="text" id="userName" placeholder="이름 입력">  <!-- ✅ 사용자 이름 입력 필드 추가 -->
+                <input type="text" id="calendarCode" placeholder="공유 코드 입력">
+                <button onclick="joinCalendar()">🔑 코드 입력</button>
+                <button onclick="generateCode()">🎲 코드 생성</button>
+                <button onclick="fetchAvailableDates()">🔍 조회</button> <!-- ✅ 조회 버튼 추가 -->
+            </div>
+
+            <h2 id="calendarTitle">달력 공유 코드: 없음</h2>
+
+            <div class="header">
+                <button onclick="prevMonth()">◀ 이전 달</button>
+                <h2 id="month-year"></h2>
+                <button onclick="nextMonth()">다음 달 ▶</button>
+            </div>
+
+            <div style="display: flex; justify-content: center; align-items: flex-start;">
+                <div>
+                    <table class="calendar">
+                        <thead>
+                            <tr>
+                                <th>일</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th>
+                            </tr>
+                        </thead>
+                        <tbody id="calendar-body"></tbody>
+                    </table>
+                </div>
+                <div style="margin-left: 20px; text-align: left;">
+                    <h3>✅ 가능한 날짜</h3>
+                    <ul id="possible-dates-list" style="list-style-type: none; padding: 0;"></ul>  
+                </div>
+            </div>
+
+            <button onclick="sendData()">📩 선택한 날짜 일정에 추가</button>
+        </div>
+    </div>
+</body>
+
+
+    <script>
+        let currentMonth = new Date().getMonth();
+        let currentYear = new Date().getFullYear();
+        let calendarCode = ""; // 공유 코드
+        let selectedDates = { available: [], unavailable: [] };
+
+        function generateCalendar(month, year) {
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const calendarBody = document.getElementById("calendar-body");
+            const monthYear = document.getElementById("month-year");
+
+            monthYear.textContent = `${year}년 ${month + 1}월`;
+            calendarBody.innerHTML = "";
+
+            let date = 1;
+            for (let i = 0; i < 6; i++) {
+                let row = document.createElement("tr");
+                for (let j = 0; j < 7; j++) {
+                    let cell = document.createElement("td");
+                    if (i === 0 && j < firstDay) {
+                        cell.textContent = "";
+                    } else if (date > daysInMonth) {
+                        break;
+                    } else {
+                        const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+                        cell.textContent = date;
+                        cell.dataset.date = dateKey;
+                        cell.onclick = function() { toggleAvailability(dateKey, cell); };
+
+                        if (selectedDates["available"].includes(dateKey)) {
+                            cell.classList.add("available");
+                        } else if (selectedDates["unavailable"].includes(dateKey)) {
+                            cell.classList.add("unavailable");
+                        }
+
+                        date++;
+                    }
+                    row.appendChild(cell);
+                }
+                calendarBody.appendChild(row);
+            }
+        }
+
+        function toggleAvailability(date, cell) {
+            if (selectedDates["available"].includes(date)) {
+                selectedDates["available"] = selectedDates["available"].filter(d => d !== date);
+                selectedDates["unavailable"].push(date);
+                cell.classList.remove("available");
+                cell.classList.add("unavailable");
+            } else if (selectedDates["unavailable"].includes(date)) {
+                selectedDates["unavailable"] = selectedDates["unavailable"].filter(d => d !== date);
+                cell.classList.remove("unavailable");
+            } else {
+                selectedDates["available"].push(date);
+                cell.classList.add("available");
+            }
+
+            console.log("선택된 날짜:", selectedDates);
+        }
+
+        function prevMonth() {
+            currentMonth--;
+            if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            generateCalendar(currentMonth, currentYear);  // ✅ 달력 다시 그리기
+        }
+        
+        function nextMonth() {
+            currentMonth++;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            }
+            generateCalendar(currentMonth, currentYear);  // ✅ 달력 다시 그리기
+        }
+        
+
+        function generateCode() {
+            let newCode = Math.random().toString(36).substr(2, 6).toUpperCase();
+            document.getElementById("calendarCode").value = newCode;
+            joinCalendar();
+        }
+
+        function joinCalendar() {
+            let inputCode = document.getElementById("calendarCode").value.trim();
+            if (inputCode.length === 0) {
+                alert("❗ 코드를 입력하세요.");
+                return;
+            }
+            calendarCode = inputCode;
+            document.getElementById("calendarTitle").textContent = `달력 공유 코드: ${calendarCode}`;
+            loadData();
+        }
+
+        function sendData() {
+            let userName = document.getElementById("userName").value.trim();
+            let inputCode = document.getElementById("calendarCode").value.trim();
+            if (!userName) {
+                alert("❗ 사용자 이름을 입력하세요.");
+                return;
+            }
+        
+            if (!calendarCode) {
+                alert("❗ 공유 코드를 입력하세요.");
+                return;
+            }
+        
+            if (selectedDates["available"].length === 0 && selectedDates["unavailable"].length === 0) {
+                alert("📅 날짜를 선택하세요!");
+                return;
+            }
+        
+            fetch("calculate_date/", {  
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    user: userName,  
+                    calendarCode: inputCode,
+                    available: selectedDates["available"],
+                    unavailable: selectedDates["unavailable"]
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert("✅ 서버 응답: " + JSON.stringify(data));
+        
+                if (data.selected_dates) {  // ✅ 서버에서 받은 날짜가 있으면
+                    generate_possible_date(data.selected_dates);  // 🚀 가능한 날짜 표시 함수 실행
+                }
+            })
+            .catch(error => console.error("❌ 오류 발생:", error));
+        }
+        
+        function fetchAvailableDates() {
+            let inputCode = document.getElementById("calendarCode").value.trim();
+            if (inputCode.length === 0) {
+                alert("❗ 공유 코드를 입력하세요.");
+                return;
+            }
+
+            fetch(`calculate_date/?calendarCode=${encodeURIComponent(inputCode)}`, {  
+                method: "GET",
+                headers: { "Content-Type": "application/json" }
+            })
+            
+            .then(response => response.json())
+            .then(data => {
+                if (data.selected_dates) {
+                    generate_possible_date(data.selected_dates);  // ✅ 조회한 날짜 표시
+                } else {
+                    alert("❌ 가능한 날짜가 없습니다.");
+                }
+            })
+            .catch(error => console.error("❌ 조회 오류:", error));
+        }
+
+        function generate_possible_date(dates) {
+            let possibleDatesList = document.getElementById("possible-dates-list");
+            possibleDatesList.innerHTML = ""; // 기존 리스트 초기화
+
+            if (dates.length === 0) {
+                possibleDatesList.innerHTML = "<li>❌ 없음</li>"; // 가능한 날짜가 없을 경우
+                return;
+            }
+
+            dates.forEach(date => {
+                let listItem = document.createElement("li");
+                listItem.textContent = `📅 ${date}`;
+                possibleDatesList.appendChild(listItem);
+            });
+        }
+        
+        
+
+        generateCalendar(currentMonth, currentYear);
+    </script>
+
+</body>
+</html>
