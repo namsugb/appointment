@@ -20,5 +20,6 @@ from . import views
 
 urlpatterns = [
     path('', views.main, name='main'),
-    path('calculate_date/', views.CalculateDateAPIView.as_view(), name='caculate_date'),
+    path('api/calculate_date/', views.CalculateDateAPIView.as_view(), name='caculate_date'),
+    path('api/appointment/', views.AppointmentAPIView.as_view(), name='appointment'),
 ]

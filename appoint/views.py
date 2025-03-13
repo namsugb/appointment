@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Appointment, Dates_info
 from .services import calculate_possible_date
-
+from .serializer import Dates_infoSerializer
 
 # Create your views here.
 def main(request):
@@ -82,3 +82,23 @@ class CalculateDateAPIView(APIView):
         return Response({"message": "날짜 저장 완료!", "selected_dates": selected_date}, status=status.HTTP_200_OK)
 
 
+class AppointmentAPIView(APIView):
+
+    def get(self, request):
+        """
+        선택한 약속의 가능,불가능한 날짜, 투표자 정보를 반환하는 API
+        """
+      
+        calendar_code = request.GET.get("calendarCode", "")
+        print(f"✅ GET 요청: {calendar_code}")
+        selected_date = sorted(calculate_possible_date(calendar_code))
+
+        Dates_info_instances = Dates_info.objects.filter(calendar_code=Appointment.objects.get(calendar_code=calendar_code))
+        serializer = Dates_infoSerializer(Dates_info_instances, many=True)
+        
+
+        return Response({
+            "message": "날짜 저장 완료!",
+            "selected_dates": selected_date,
+            "dates_info": serializer.data  # ✅ 사용자별 가능/불가능 날짜 추가
+        }, status=status.HTTP_200_OK)

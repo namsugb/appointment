@@ -22,26 +22,26 @@
 <body>
     <div style="display: flex;">
         <!-- Sidebar for instructions -->
-        <div style="width: 200px; padding: 10px; border-right: 1px solid #ccc;">
+        {% comment %} <div style="width: 200px; padding: 10px; border-right: 1px solid #ccc;">
             <p>1. 코드생성</p>
             <p>2. 이름입력</p>
             <p>3. 달력에서 날짜 선택 <br>(1번 클릭: 가능, 2번 클릭: 불가능)</p>
             <p>4. 선택한 날짜 서버로 전송</p>
             <p>5. 공유 코드 친구들한테 공유</p>
             <p>6. 이후에 입력하는 친구들은 전달받은 코드 복붙하고 "코드입력" 클릭하고 이후에는 동일하게</p>
-        </div>
+
+            <p> 가능한 날짜로 투표된 날 중 불가능한 날을 제외한 날들이 집계됩니다</p>
+        </div> {% endcomment %}
 
         <!-- Main content -->
         <div style="flex-grow: 1; padding: 20px;">
             <div class="code-section">
                 <input type="text" id="userName" placeholder="이름 입력">  <!-- ✅ 사용자 이름 입력 필드 추가 -->
                 <input type="text" id="calendarCode" placeholder="공유 코드 입력">
-                <button onclick="joinCalendar()">🔑 코드 입력</button>
                 <button onclick="generateCode()">🎲 코드 생성</button>
                 <button onclick="fetchAvailableDates()">🔍 조회</button> <!-- ✅ 조회 버튼 추가 -->
             </div>
 
-            <h2 id="calendarTitle">달력 공유 코드: 없음</h2>
 
             <div class="header">
                 <button onclick="prevMonth()">◀ 이전 달</button>
@@ -59,14 +59,20 @@
                         </thead>
                         <tbody id="calendar-body"></tbody>
                     </table>
+                    <button onclick="sendData()">📩 선택한 날짜 일정에 추가</button>
                 </div>
                 <div style="margin-left: 20px; text-align: left;">
-                    <h3>✅ 가능한 날짜</h3>
+                    <h3>✅ 모두 가능한 날짜</h3>
                     <ul id="possible-dates-list" style="list-style-type: none; padding: 0;"></ul>  
+                    <div style="margin-top: 20px;">
+                        <h3>🧑 사용자별 가능/불가능 날짜</h3>
+                        <div id="user-availability-list"></div>
+                    </div>
+                    
                 </div>
             </div>
 
-            <button onclick="sendData()">📩 선택한 날짜 일정에 추가</button>
+            
         </div>
     </div>
 </body>
@@ -155,23 +161,13 @@
         function generateCode() {
             let newCode = Math.random().toString(36).substr(2, 6).toUpperCase();
             document.getElementById("calendarCode").value = newCode;
-            joinCalendar();
         }
 
-        function joinCalendar() {
-            let inputCode = document.getElementById("calendarCode").value.trim();
-            if (inputCode.length === 0) {
-                alert("❗ 코드를 입력하세요.");
-                return;
-            }
-            calendarCode = inputCode;
-            document.getElementById("calendarTitle").textContent = `달력 공유 코드: ${calendarCode}`;
-            loadData();
-        }
+    
 
         function sendData() {
             let userName = document.getElementById("userName").value.trim();
-            let inputCode = document.getElementById("calendarCode").value.trim();
+            let calendarCode = document.getElementById("calendarCode").value.trim();
             if (!userName) {
                 alert("❗ 사용자 이름을 입력하세요.");
                 return;
@@ -187,12 +183,12 @@
                 return;
             }
         
-            fetch("calculate_date/", {  
+            fetch("api/calculate_date/", {  
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
                     user: userName,  
-                    calendarCode: inputCode,
+                    calendarCode: calendarCode,
                     available: selectedDates["available"],
                     unavailable: selectedDates["unavailable"]
                 })
@@ -214,29 +210,66 @@
                 alert("❗ 공유 코드를 입력하세요.");
                 return;
             }
-
-            fetch(`calculate_date/?calendarCode=${encodeURIComponent(inputCode)}`, {  
+        
+            fetch(`api/appointment/?calendarCode=${encodeURIComponent(inputCode)}`, {  
                 method: "GET",
                 headers: { "Content-Type": "application/json" }
             })
-            
             .then(response => response.json())
             .then(data => {
                 if (data.selected_dates) {
-                    generate_possible_date(data.selected_dates);  // ✅ 조회한 날짜 표시
-                } else {
-                    alert("❌ 가능한 날짜가 없습니다.");
+                    generate_possible_date(data.selected_dates);  // ✅ 가능한 날짜 표시
+                }
+        
+                if (data.dates_info) {
+                    generate_user_availability(data.dates_info);  // ✅ 사용자별 가능/불가능 날짜 표시
                 }
             })
             .catch(error => console.error("❌ 조회 오류:", error));
         }
+        
+        function generate_user_availability(dates_info) {
+            let container = document.getElementById("user-availability-list");
+            container.innerHTML = ""; // 기존 목록 초기화
+        
+            if (dates_info.length === 0) {
+                container.innerHTML = "<li>❌ 데이터 없음</li>";
+                return;
+            }
+        
+            dates_info.forEach(info => {
+                let userSection = document.createElement("div");
+                userSection.style.marginBottom = "10px";
+        
+                let userTitle = document.createElement("h3");
+                userTitle.textContent = `🧑 ${info.user}`;
+                userSection.appendChild(userTitle);
+        
+                let availableList = document.createElement("ul");
+                availableList.style.color = "green";
+                availableList.innerHTML = info.available_dates.length > 0 
+                    ? info.available_dates.map(date => `<li>✅ ${date}</li>`).join("")
+                    : "<li> 가능한 날짜 없음</li>";
+        
+                let unavailableList = document.createElement("ul");
+                unavailableList.style.color = "red";
+                unavailableList.innerHTML = info.unavailable_dates.length > 0 
+                    ? info.unavailable_dates.map(date => `<li>❌ ${date}</li>`).join("")
+                    : "<li> 없음</li>";
+        
+                userSection.appendChild(availableList);
+                userSection.appendChild(unavailableList);
+                container.appendChild(userSection);
+            });
+        }
+        
 
         function generate_possible_date(dates) {
             let possibleDatesList = document.getElementById("possible-dates-list");
             possibleDatesList.innerHTML = ""; // 기존 리스트 초기화
 
             if (dates.length === 0) {
-                possibleDatesList.innerHTML = "<li>❌ 없음</li>"; // 가능한 날짜가 없을 경우
+                possibleDatesList.innerHTML = "<li>❌ 가능한 날짜 없음</li>"; // 가능한 날짜가 없을 경우
                 return;
             }
 
