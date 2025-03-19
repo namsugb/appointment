@@ -193,15 +193,15 @@
                     unavailable: selectedDates["unavailable"]
                 })
             })
+            
             .then(response => response.json())
             .then(data => {
                 alert("✅ 서버 응답: " + JSON.stringify(data));
         
-                if (data.selected_dates) {  // ✅ 서버에서 받은 날짜가 있으면
-                    generate_possible_date(data.selected_dates);  // 🚀 가능한 날짜 표시 함수 실행
-                }
+          
             })
             .catch(error => console.error("❌ 오류 발생:", error));
+            fetchAvailableDates()
         }
         
         function fetchAvailableDates() {
