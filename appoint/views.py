@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Appointment, Dates_info
 from .services import calculate_possible_date
-from .serializer import Dates_infoSerializer
+from .serializer import Dates_infoSerializer, FeedbackSerializer
 
 # Create your views here.
 def main(request):
@@ -102,3 +102,12 @@ class AppointmentAPIView(APIView):
             "selected_dates": selected_date,
             "dates_info": serializer.data  # ✅ 사용자별 가능/불가능 날짜 추가
         }, status=status.HTTP_200_OK)
+    
+
+class FeedbackAPIView(APIView):
+    def post(self, request):
+        serializer = FeedbackSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "피드백 저장 완료!"}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

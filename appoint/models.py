@@ -28,3 +28,13 @@ class Selected_date(models.Model):
     """
     calendar_code = models.ForeignKey(Appointment, on_delete=models.CASCADE, verbose_name="달력 코드")
     selected_dates = models.CharField(max_length=50, verbose_name="선택한 날짜")
+
+
+
+class Feedback(models.Model):
+    
+    message = models.TextField(verbose_name="피드백 내용")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.message}"
