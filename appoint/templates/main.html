@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>우리지금만나</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        .calendar { width: 350px; margin: 20px auto; border-collapse: collapse; table-layout: fixed; }
+        .calendar th, .calendar td { 
+            border: 1px solid #ddd; padding: 10px; text-align: center; cursor: pointer;
+            width: 50px; height: 50px; position: relative;
+        }
+        .calendar th { background: #f4f4f4; }
+        .available { background: #c8f7c5; }  /* 가능: 초록색 */
+        .unavailable { background: #f7c5c5; }  /* 불가능: 빨간색 */
+        .header { display: flex; justify-content: space-between; align-items: center; width: 350px; margin: 20px auto; }
+        .header button { padding: 5px 10px; cursor: pointer; }
+        .code-section { margin-bottom: 10px; }
+    </style>
+    <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
+</head>
+<body>
+    <div style="display: flex;">
+        <!-- Sidebar for instructions -->
+        {% comment %} <div style="width: 200px; padding: 10px; border-right: 1px solid #ccc;">
+            <p>1. 코드생성</p>
+            <p>2. 이름입력</p>
+            <p>3. 달력에서 날짜 선택 <br>(1번 클릭: 가능, 2번 클릭: 불가능)</p>
+            <p>4. 선택한 날짜 서버로 전송</p>
+            <p>5. 공유 코드 친구들한테 공유</p>
+            <p>6. 이후에 입력하는 친구들은 전달받은 코드 복붙하고 "코드입력" 클릭하고 이후에는 동일하게</p>
+
+            <p> 가능한 날짜로 투표된 날 중 불가능한 날을 제외한 날들이 집계됩니다</p>
+        </div> {% endcomment %}
+
+        <!-- Main content -->
+        <div style="flex-grow: 1; padding: 20px;">
+            <div class="code-section">
+                <input type="text" id="userName" placeholder="이름 입력">  <!-- ✅ 사용자 이름 입력 필드 추가 -->
+                <input type="text" id="calendarCode" placeholder="공유 코드 입력">
+                <button onclick="generateCode()">🎲 코드 생성</button>
+                <button onclick="fetchAvailableDates()">🔍 조회</button> <!-- ✅ 조회 버튼 추가 -->
+                <button onclick="sendKakaoInvite()">💌 카카오톡으로 친구 초대</button>
+
+            </div>
+
+
+            <div class="header">
+                <button onclick="prevMonth()">◀ 이전 달</button>
+                <h2 id="month-year"></h2>
+                <button onclick="nextMonth()">다음 달 ▶</button>
+            </div>
+
+            <div style="display: flex; justify-content: center; align-items: flex-start;">
+                <div>
+                    <table class="calendar">
+                        <thead>
+                            <tr>
+                                <th>일</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th>
+                            </tr>
+                        </thead>
+                        <tbody id="calendar-body"></tbody>
+                    </table>
+                    <button onclick="sendData()">📩 선택한 날짜 일정에 추가</button>
+
+                    <div style="margin-top: 30px;">
+                        <h3>💬 피드백 보내기</h3>
+                        <textarea id="feedbackMessage" placeholder="피드백을 입력해주세요" rows="4" cols="50"></textarea>
+                        <br>
+                        <button onclick="sendFeedback()">📩 피드백 제출</button>
+                    </div>
+                </div>
+
+                <div style="margin-left: 20px; text-align: left;">
+
+                    <!-- 참여자 목록 -->
+                    <div style="margin-top: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; background-color: #fffdf5;">
+                        <h3>🧑‍🤝‍🧑 투표에 참여한 인원</h3>
+                        <ul id="participant-list" style="list-style-type: none; padding: 0; margin: 0;"></ul>
+                    </div>
+                
+                    <!-- 모두 가능한 날짜 -->
+                    <div style="margin-top: 20px; padding: 10px; border: 1px solid #b5f7c6; border-radius: 8px; background-color: #f0fff5;">
+                        <h3>✅ 모두 가능한 날짜</h3>
+                        <ul id="possible-dates-list" style="list-style-type: none; padding: 0; margin: 0;"></ul>  
+                    </div>
+                
+                    <!-- 사용자별 날짜 정보 -->
+                    <div style="margin-top: 20px; padding: 10px; border: 1px solid #f0d0d0; border-radius: 8px; background-color: #fff7f7;">
+                        <h3>🧑사용자별 선호 / 불가능 날짜</h3>
+                        <div id="user-availability-list"></div>
+                    </div>
+                
+                </div>
+                
+            </div>
+
+            
+        </div>
+    </div>
+</body>
+
+
+    <script>
+        Kakao.init("b3189b0e2886a0099c5db4b9fb70d4e4"); // ✅ 발급받은 JavaScript 키 입력
+        console.log(Kakao.isInitialized()); // true면 성공!
+
+        let currentMonth = new Date().getMonth();
+        let currentYear = new Date().getFullYear();
+        let calendarCode = ""; // 공유 코드
+        let selectedDates = { available: [], unavailable: [] };
+
+        function generateCalendar(month, year) {
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const calendarBody = document.getElementById("calendar-body");
+            const monthYear = document.getElementById("month-year");
+
+            monthYear.textContent = `${year}년 ${month + 1}월`;
+            calendarBody.innerHTML = "";
+
+            let date = 1;
+            for (let i = 0; i < 6; i++) {
+                let row = document.createElement("tr");
+                for (let j = 0; j < 7; j++) {
+                    let cell = document.createElement("td");
+                    if (i === 0 && j < firstDay) {
+                        cell.textContent = "";
+                    } else if (date > daysInMonth) {
+                        break;
+                    } else {
+                        const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+                        cell.textContent = date;
+                        cell.dataset.date = dateKey;
+                        cell.onclick = function() { toggleAvailability(dateKey, cell); };
+
+                        if (selectedDates["available"].includes(dateKey)) {
+                            cell.classList.add("available");
+                        } else if (selectedDates["unavailable"].includes(dateKey)) {
+                            cell.classList.add("unavailable");
+                        }
+
+                        date++;
+                    }
+                    row.appendChild(cell);
+                }
+                calendarBody.appendChild(row);
+            }
+        }
+
+        function toggleAvailability(date, cell) {
+            if (selectedDates["available"].includes(date)) {
+                selectedDates["available"] = selectedDates["available"].filter(d => d !== date);
+                selectedDates["unavailable"].push(date);
+                cell.classList.remove("available");
+                cell.classList.add("unavailable");
+            } else if (selectedDates["unavailable"].includes(date)) {
+                selectedDates["unavailable"] = selectedDates["unavailable"].filter(d => d !== date);
+                cell.classList.remove("unavailable");
+            } else {
+                selectedDates["available"].push(date);
+                cell.classList.add("available");
+            }
+
+            console.log("선택된 날짜:", selectedDates);
+        }
+
+        function prevMonth() {
+            currentMonth--;
+            if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            generateCalendar(currentMonth, currentYear);  // ✅ 달력 다시 그리기
+        }
+        
+        function nextMonth() {
+            currentMonth++;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            }
+            generateCalendar(currentMonth, currentYear);  // ✅ 달력 다시 그리기
+        }
+        
+
+        function generateCode() {
+            let newCode = Math.random().toString(36).substr(2, 6).toUpperCase();
+            document.getElementById("calendarCode").value = newCode;
+        }
+
+    
+
+        function sendData() {
+            let userName = document.getElementById("userName").value.trim();
+            let calendarCode = document.getElementById("calendarCode").value.trim();
+            if (!userName) {
+                alert("❗ 사용자 이름을 입력하세요.");
+                return;
+            }
+        
+            if (!calendarCode) {
+                alert("❗ 공유 코드를 입력하세요.");
+                return;
+            }
+        
+            if (selectedDates["available"].length === 0 && selectedDates["unavailable"].length === 0) {
+                alert("📅 날짜를 선택하세요!");
+                return;
+            }
+        
+            fetch("/api/calculate_date/", {  
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    user: userName,  
+                    calendarCode: calendarCode,
+                    available: selectedDates["available"],
+                    unavailable: selectedDates["unavailable"]
+                })
+            })
+            
+            .then(response => response.json())
+            .then(data => {
+                alert("✅ 서버 응답: " + JSON.stringify(data));
+        
+          
+            })
+            .catch(error => console.error("❌ 오류 발생:", error));
+            fetchAvailableDates()
+        }
+        
+        function fetchAvailableDates() {
+            let inputCode = document.getElementById("calendarCode").value.trim();
+            if (inputCode.length === 0) {
+                alert("❗ 공유 코드를 입력하세요.");
+                return;
+            }
+        
+            fetch(`/api/appointment/?calendarCode=${encodeURIComponent(inputCode)}`, {  
+                method: "GET",
+                headers: { "Content-Type": "application/json" }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.selected_dates) {
+                    generate_possible_date(data.selected_dates);  // ✅ 가능한 날짜 표시
+                }
+        
+                if (data.dates_info) {
+                    generate_user_availability(data.dates_info);  // ✅ 사용자별 가능/불가능 날짜 표시
+                }
+
+                if (data.dates_info) {
+                    generate_participant_list(data.dates_info);  // ✅ 사용자별 가능/불가능 날짜 표시
+                }
+
+                
+            })
+            .catch(error => console.error("❌ 조회 오류:", error));
+        }
+        
+        function generate_participant_list(dates_info) {
+            let listContainer = document.getElementById("participant-list");
+            listContainer.innerHTML = ""; // 초기화
+        
+            const users = dates_info.map(info => info.user).filter(Boolean); // 빈 이름 제외
+            if (users.length === 0) {
+                listContainer.innerHTML = "<li>❌ 아직 아무도 참여하지 않았어요.</li>";
+                return;
+            }
+        
+            users.forEach(name => {
+                const li = document.createElement("li");
+                li.textContent = `🙋 ${name}`;
+                listContainer.appendChild(li);
+            });
+        }
+        
+
+        function generate_user_availability(dates_info) {
+            let container = document.getElementById("user-availability-list");
+            container.innerHTML = ""; // 기존 목록 초기화
+        
+            if (dates_info.length === 0) {
+                container.innerHTML = "<li>❌ 데이터 없음</li>";
+                return;
+            }
+        
+            dates_info.forEach(info => {
+                let userSection = document.createElement("div");
+                userSection.style.marginBottom = "10px";
+        
+                let userTitle = document.createElement("h3");
+                userTitle.textContent = ` ${info.user}`;
+                userSection.appendChild(userTitle);
+        
+                let availableList = document.createElement("ul");
+                availableList.style.color = "green";
+                availableList.innerHTML = info.available_dates.length > 0 
+                    ? info.available_dates.map(date => `<li>✅ ${date}</li>`).join("")
+                    : "<li> 선호 날짜 없음</li>";
+        
+                let unavailableList = document.createElement("ul");
+                unavailableList.style.color = "red";
+                unavailableList.innerHTML = info.unavailable_dates.length > 0 
+                    ? info.unavailable_dates.map(date => `<li>❌ ${date}</li>`).join("")
+                    : "<li>불가능 날짜 없음</li>";
+        
+                userSection.appendChild(availableList);
+                userSection.appendChild(unavailableList);
+                container.appendChild(userSection);
+            });
+        }
+        
+
+        function generate_possible_date(dates) {
+            let possibleDatesList = document.getElementById("possible-dates-list");
+            possibleDatesList.innerHTML = ""; // 기존 리스트 초기화
+
+            if (dates.length === 0) {
+                possibleDatesList.innerHTML = "<li>❌ 가능한 날짜 없음</li>"; // 가능한 날짜가 없을 경우
+                return;
+            }
+
+            dates.forEach(date => {
+                let listItem = document.createElement("li");
+                listItem.textContent = `📅 ${date}`;
+                possibleDatesList.appendChild(listItem);
+            });
+        }
+        
+
+        function sendFeedback() {
+            
+            const message = document.getElementById("feedbackMessage").value.trim();
+        
+            fetch("/api/feedback/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert("✅ " + data.message);
+                document.getElementById("feedbackMessage").value = "";
+            })
+            .catch(error => {
+                console.error("❌ 오류:", error);
+                alert("서버 오류가 발생했습니다.");
+            });
+        }
+        
+        function sendKakaoInvite() {
+            const calendarCode = document.getElementById("calendarCode").value.trim();
+        
+            if (!calendarCode) {
+                alert("❗ 공유 코드를 먼저 입력하세요.");
+                return;
+            }
+        
+            Kakao.Link.sendDefault({
+                objectType: 'text',
+                text: `📅 함께 약속을 정해볼까요?\n공유 코드: ${calendarCode}`,
+                link: {
+                    mobileWebUrl: window.location.href,
+                    webUrl: window.location.href
+                },
+                buttonTitle: '👉 지금 참여하기'
+            });
+        }
+        
+        generateCalendar(currentMonth, currentYear);
+    </script>
+
+</body>
+</html>
