@@ -13,7 +13,7 @@ from .serializer import Dates_infoSerializer, FeedbackSerializer
 
 # Create your views here.
 def instruct(request):
-    return HttpResponse("✅ instruct 뷰 정상 연결됨!")
+    return render(request, 'instruct.html')
 
 def main(request):
     return render(request, 'main.html')
