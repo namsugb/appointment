@@ -210,7 +210,7 @@
                 return;
             }
         
-            fetch("api/calculate_date/", {  
+            fetch("/api/calculate_date/", {  
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
@@ -238,7 +238,7 @@
                 return;
             }
         
-            fetch(`api/appointment/?calendarCode=${encodeURIComponent(inputCode)}`, {  
+            fetch(`/api/appointment/?calendarCode=${encodeURIComponent(inputCode)}`, {  
                 method: "GET",
                 headers: { "Content-Type": "application/json" }
             })
@@ -336,7 +336,7 @@
             
             const message = document.getElementById("feedbackMessage").value.trim();
         
-            fetch("api/feedback/", {
+            fetch("/api/feedback/", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ message: message })

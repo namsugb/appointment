@@ -12,6 +12,9 @@ from .services import calculate_possible_date
 from .serializer import Dates_infoSerializer, FeedbackSerializer
 
 # Create your views here.
+def instruct(request):
+    return render(request, 'instruct.html')
+
 def main(request):
     return render(request, 'main.html')
 
@@ -86,6 +89,8 @@ class AppointmentAPIView(APIView):
 
     def get(self, request):
         """
+        fetchAvailableDates
+        '조회'버튼 클릭시 실행되는 api
         선택한 약속의 가능,불가능한 날짜, 투표자 정보를 반환하는 API
         """
       
